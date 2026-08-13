@@ -39,3 +39,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/src/generated/prisma
+
+# database (SQLite is no longer used, but ignore stray local copies)
+/dev.db
+/dev.db-journal
+/prisma/dev.db
+/prisma/dev.db-journal
+
+# transient snapshot used for the one-time SQLite -> Postgres migration
+/prisma/sqlite-snapshot.json
+
+# user-uploaded content-block attachments
+/public/uploads
+
+# personal local Claude Code settings — not meant to be shared
+.claude/settings.local.json

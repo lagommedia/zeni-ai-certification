@@ -1,0 +1,253 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum EnrollmentStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  CERTIFICATE
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  role          Role           @default(USER)
+  title         String?
+  avatarColor   String         @default("#635BFF")
+  createdAt     DateTime       @default(now())
+  enrollments   Enrollment[]
+  certificates  Certificate[]
+  notifications Notification[]
+  quizAttempts  QuizAttempt[]
+}
+
+model Course {
+  id           String        @id @default(cuid())
+  title        String
+  description  String
+  category     String
+  level        CourseLevel   @default(BEGINNER)
+  durationMins Int           @default(30)
+  published    Boolean       @default(true)
+  coverColor   String        @default("#635BFF")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  modules      Module[]
+  enrollments  Enrollment[]
+  certificates Certificate[]
+  finalExam    Quiz?
+
+  @@index([published])
+}
+
+model Module {
+  id           String           @id @default(cuid())
+  courseId     String
+  course       Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title        String
+  subtitle     String?
+  // Legacy free-text blurb — superseded by the auto-managed "what you'll
+  // learn" objectives block (see lib/module-content.ts), kept nullable for
+  // modules seeded before that existed.
+  content      String?
+  videoUrl     String?
+  // Original filename of a directly-uploaded video (videoUrl starting with
+  // /uploads/) — shown in the admin editor instead of the random stored
+  // name. Null for YouTube/Vimeo/Drive links or file URLs pasted in.
+  videoFileName String?
+  order        Int
+  durationMins Int              @default(10)
+  progress     ModuleProgress[]
+  quiz         Quiz?
+  blocks       ContentBlock[]
+
+  @@index([courseId])
+}
+
+enum ContentBlockType {
+  PARAGRAPH
+  HEADING
+  CALLOUT
+  // A sapphire box showing a single line of text with a "Copy" button —
+  // e.g. an example prompt the reader can copy elsewhere. Only `body` is
+  // used; no heading/eyebrow, no variant.
+  COPY_BLOCK
+}
+
+enum CalloutVariant {
+  NEUTRAL
+  HIGHLIGHT
+  ACTION
+}
+
+// A single formatted piece of a module's lesson body — a paragraph, a
+// sub-heading, or a colored callout box (objectives, a key habit, an
+// action prompt). `heading` doubles as the heading text for HEADING blocks
+// and the eyebrow label for CALLOUT blocks; `body` is markdown-lite prose
+// (supports **bold** and "- " bullet lines, parsed client-side — never
+// rendered as raw HTML).
+model ContentBlock {
+  id       String           @id @default(cuid())
+  moduleId String
+  module   Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  type     ContentBlockType
+  order    Int
+  heading  String?
+  body     String?
+  variant  CalloutVariant?
+  // Optional downloadable attachment — currently only surfaced on CALLOUT
+  // blocks (e.g. a sample file to test a "now you" prompt against).
+  // fileUrl is the public path under /uploads; fileName is the original
+  // filename, shown to the user and set as the download's suggested name.
+  fileUrl  String?
+  fileName String?
+
+  @@index([moduleId])
+}
+
+// A Quiz belongs to exactly one of: a Module (per-module check) or a Course
+// (the final "master test" gating the certificate).
+model Quiz {
+  id            String         @id @default(cuid())
+  moduleId      String?        @unique
+  module        Module?        @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  courseId      String?        @unique
+  course        Course?        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  passingScore  Int            @default(75)
+  createdAt     DateTime       @default(now())
+  questions     QuizQuestion[]
+  attempts      QuizAttempt[]
+}
+
+model QuizQuestion {
+  id      String       @id @default(cuid())
+  quizId  String
+  quiz    Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  prompt  String
+  order   Int
+  choices QuizChoice[]
+
+  @@index([quizId])
+}
+
+model QuizChoice {
+  id         String       @id @default(cuid())
+  questionId String
+  question   QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text       String
+  isCorrect  Boolean      @default(false)
+  order      Int
+
+  @@index([questionId])
+}
+
+model QuizAttempt {
+  id        String   @id @default(cuid())
+  quizId    String
+  quiz      Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score     Int
+  passed    Boolean
+  answers   Json
+  createdAt DateTime @default(now())
+
+  @@index([quizId, userId])
+}
+
+model Enrollment {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId    String
+  course      Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  status      EnrollmentStatus @default(NOT_STARTED)
+  startedAt   DateTime         @default(now())
+  completedAt DateTime?
+  progress    ModuleProgress[]
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+}
+
+model ModuleProgress {
+  id           String     @id @default(cuid())
+  enrollmentId String
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  moduleId     String
+  module       Module     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  completed    Boolean    @default(false)
+  completedAt  DateTime?
+  // True once the module's directly-uploaded (native <video>) file has been
+  // played through to the end at least once. Only enforced as a quiz gate
+  // for that video kind — YouTube/Vimeo/Drive embeds have no reliable,
+  // cross-origin-safe way to detect real playback completion, so those
+  // modules are never gated by this flag (see lib/video.ts).
+  videoWatched Boolean    @default(false)
+  // Self-reported confirmation that the student did the exercise in the
+  // module's "Now it's your turn" callout (see HONOR_CALLOUT_HEADING in
+  // lib/module-content.ts). Honor system only — not independently verified,
+  // just gates the quiz behind an explicit checkbox.
+  honorConfirmed Boolean  @default(false)
+
+  @@unique([enrollmentId, moduleId])
+}
+
+model Certificate {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId   String
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  certNumber String   @unique
+  // Opaque, non-sequential token for the public verification page and
+  // LinkedIn's certUrl param — deliberately separate from the internal `id`
+  // so that id (used elsewhere, e.g. revalidatePath-adjacent lookups) never
+  // has to be exposed on an unauthenticated route.
+  publicId   String   @unique @default(uuid())
+  issuedAt   DateTime @default(now())
+
+  @@unique([userId, courseId])
+  @@index([userId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      NotificationType @default(INFO)
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+}

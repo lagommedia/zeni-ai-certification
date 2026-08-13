@@ -1,26 +1,258 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-heading: var(--font-sans);
+
+  /* Zeni named type scale — Manrope Medium (500) throughout.
+     Namespaced (text-h1..text-xtrasmall) so it doesn't collide with
+     Tailwind's own text-sm/text-lg/text-xl scale used elsewhere. */
+  --text-h1: 56px;
+  --text-h1--line-height: 1.05;
+  --text-h2: 48px;
+  --text-h2--line-height: 1.05;
+  --text-h3: 40px;
+  --text-h3--line-height: 1.1;
+  --text-h4: 36px;
+  --text-h4--line-height: 1.1;
+  --text-h5: 32px;
+  --text-h5--line-height: 1.15;
+  --text-h6: 24px;
+  --text-h6--line-height: 1.2;
+  --text-h7: 20px;
+  --text-h7--line-height: 1.3;
+  --text-xtralarge: 18px;
+  --text-xtralarge--line-height: 1.5;
+  --text-standard: 14px;
+  --text-standard--line-height: 1.5;
+  --text-xtrasmall: 11px;
+  --text-xtrasmall--line-height: 1.4;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Zeni brand palette as first-class Tailwind colors (bg-jade, text-sapphire, etc) */
+  --color-onyx: var(--onyx);
+  --color-sapphire: var(--sapphire);
+  --color-sapphire-light: var(--sapphire-light);
+  --color-sapphire-dark: var(--sapphire-dark);
+  --color-jade: var(--jade);
+  --color-jade-light: var(--jade-light);
+  --color-jade-dark: var(--jade-dark);
+  --color-pearl: var(--pearl);
+  --color-opal: var(--opal);
+  --color-opal-light: var(--opal-light);
+  --color-gold: var(--gold);
+  --color-gold-light: var(--gold-light);
+  --color-ruby: var(--ruby);
+  --color-ruby-light: var(--ruby-light);
+  --color-champion: var(--champion);
+  --color-hero: var(--hero);
+
+  /* Action colors */
+  --color-success: var(--success);
+  --color-success-light: var(--success-light);
+  --color-warning: var(--warning);
+  --color-warning-light: var(--warning-light);
+  --color-attention: var(--attention);
+  --color-attention-light: var(--attention-light);
+  --color-info: var(--info);
+  --color-info-light: var(--info-light);
+  --color-link: var(--link);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  /* ============================================================
+     Zeni brand tokens — from Zeni's official design system.
+     ============================================================ */
+  --onyx: #162324;
+  --sapphire: #366170;
+  --jade: #97c3b9;
+  --pearl: #fafafa;
+  --opal: #c9abc7;
+  --gold: #eeba7d;
+  --ruby: #ad584a;
+
+  --sapphire-light: #d2e3e9;
+  --sapphire-dark: #264540;
+  --jade-light: #d5e7e3;
+  --jade-dark: #508b7e;
+  --opal-light: #e5d7e4;
+  --gold-light: #f7e0c4;
+  --ruby-light: #ebd4d1;
+
+  --bg: #f3f7f7;
+  --champion: #4b5253;
+  --hero: #757d7e;
+  --gray-1: #a6b0b1;
+  --gray-2: #d4dcdd;
+  --gray-3: #e9f0f0;
+  --gray-4: #fafcfc;
+  --gray-5: #ffffff;
+
+  --success: #36b37e;
+  --warning: #f0bc02;
+  --attention: #eb535d;
+  --info: #1192e8;
+  --link: #4589ff;
+  --success-light: #d8fbde;
+  --warning-light: #fef7cb;
+  --attention-light: #fee6dd;
+  --info-light: #cef6fd;
+
+  /* Zeni's dark-hero gradient (verified against zeni.ai's own computed
+     styles) — Onyx fading to a lighter teal. Used behind the certificate's
+     header band; pair with flow-lines.svg anchored at the bottom. */
+  --gradient-hero-dark: linear-gradient(180deg, #162324 0%, #204a58 100%);
+
+  /* ============================================================
+     shadcn semantic tokens, mapped onto the Zeni palette above.
+     ============================================================ */
+  --background: var(--bg);
+  --foreground: var(--onyx);
+  --card: var(--gray-5);
+  --card-foreground: var(--onyx);
+  --popover: var(--gray-5);
+  --popover-foreground: var(--onyx);
+  --primary: var(--onyx);
+  --primary-foreground: var(--pearl);
+  --secondary: var(--gray-4);
+  --secondary-foreground: var(--onyx);
+  --muted: var(--gray-3);
+  --muted-foreground: var(--hero);
+  --accent: var(--jade-light);
+  --accent-foreground: var(--sapphire-dark);
+  --destructive: var(--attention);
+  --border: var(--gray-2);
+  --input: var(--gray-2);
+  --ring: var(--sapphire);
+  --chart-1: var(--sapphire);
+  --chart-2: var(--jade);
+  --chart-3: var(--gold);
+  --chart-4: var(--opal);
+  --chart-5: var(--ruby);
+  --radius: 0.75rem;
+
+  /* Sidebar is always dark Onyx, matching Zeni's own app shell. */
+  --sidebar: var(--onyx);
+  --sidebar-foreground: rgb(250 250 250 / 78%);
+  --sidebar-primary: var(--jade);
+  --sidebar-primary-foreground: var(--onyx);
+  --sidebar-accent: rgb(151 195 185 / 14%);
+  --sidebar-accent-foreground: var(--pearl);
+  --sidebar-border: rgb(250 250 250 / 8%);
+  --sidebar-ring: var(--sapphire);
+}
+
+.dark {
+  --bg: #1b1c1c;
+  --champion: #d4dbdb;
+  --hero: #aab4b5;
+  --gray-1: #7a8485;
+  --gray-2: #545b5c;
+  --gray-3: #3e4343;
+  --gray-4: #202222;
+  --gray-5: #2c2f2f;
+
+  --background: var(--bg);
+  --foreground: var(--champion);
+  --card: var(--gray-5);
+  --card-foreground: var(--champion);
+  --popover: var(--gray-5);
+  --popover-foreground: var(--champion);
+  --primary: var(--jade);
+  --primary-foreground: var(--onyx);
+  --secondary: var(--gray-4);
+  --secondary-foreground: var(--champion);
+  --muted: var(--gray-3);
+  --muted-foreground: var(--hero);
+  --accent: var(--gray-3);
+  --accent-foreground: var(--jade);
+  --destructive: var(--attention);
+  --border: var(--gray-2);
+  --input: var(--gray-2);
+  --ring: var(--jade);
+  --chart-1: var(--jade);
+  --chart-2: var(--sapphire-light);
+  --chart-3: var(--gold);
+  --chart-4: var(--opal);
+  --chart-5: var(--ruby);
+
+  --sidebar: #101717;
+  --sidebar-foreground: rgb(250 250 250 / 78%);
+  --sidebar-primary: var(--jade);
+  --sidebar-primary-foreground: var(--onyx);
+  --sidebar-accent: rgb(151 195 185 / 14%);
+  --sidebar-accent-foreground: var(--pearl);
+  --sidebar-border: rgb(250 250 250 / 8%);
+  --sidebar-ring: var(--sapphire);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Force the certificate's dark header band and gradients to actually print
+   — browsers strip background colors/images by default unless the page (or
+   the user's print dialog) opts into exact color rendering. */
+@media print {
+  .certificate-card,
+  .certificate-card * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
