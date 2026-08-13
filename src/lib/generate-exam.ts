@@ -54,7 +54,25 @@ Prioritize, in roughly this order:
 2. Realistic scenarios: given a situation with a customer or teammate, what is the right way to interact with the AI CFO or communicate the result? These require judgment, not recall of a number.
 3. Common misconceptions or mistakes a new team member might make, and the caveats the course explicitly calls out.
 
-Cover breadth across all modules in the material — do not repeat the same underlying concept more than two or three times across the ${QUESTION_COUNT} questions. Write plausible, non-trivial wrong answers; avoid choices that are obviously silly filler.`;
+Cover breadth across all modules in the material — do not repeat the same underlying concept more than two or three times across the ${QUESTION_COUNT} questions. Write plausible, non-trivial wrong answers; avoid choices that are obviously silly filler.
+
+CHOICE LENGTH — this is a hard requirement, not a suggestion. Across every question you write, the most common failure is making the correct choice the longest, most detailed, or most hedged one — that alone lets a test-taker guess it without knowing the material. For each question:
+- Count words. All ${CHOICE_COUNT} choices must land within about 20% of each other in word count — roughly the same length, give or take a few words. None may be dramatically longer or shorter than the rest.
+- Match register too: if the correct choice is a single crisp sentence, every distractor must also be a single crisp sentence (not a fragment, not a run-on). If distractors are short and punchy, the correct choice must be equally short and punchy — cut it down rather than leaving it as the one detailed, qualified answer.
+- Do not signal correctness through hedging, extra caveats, or "more precise-sounding" phrasing on the right answer. Wrong answers should be just as specific and confidently worded — plausible enough that only someone who actually knows the material can eliminate them.
+
+Bad example (correct answer is obvious from length/detail alone — never write like this):
+  A) It shows progress.
+  B) It streams the model's intermediate reasoning steps in real time as it works through the financial data, so the user can see how the answer is being derived rather than just waiting for a final number.
+  C) It's a loading spinner.
+  D) It logs errors.
+Good example (same correct answer, rewritten so all four are comparable):
+  A) It shows a generic loading indicator.
+  B) It streams the model's intermediate reasoning steps as it works.
+  C) It displays a static progress percentage.
+  D) It logs backend errors for debugging.
+
+Also vary which position (first, second, third, fourth) holds the correct answer across the ${QUESTION_COUNT} questions, rather than favoring one slot. Before finalizing each question, check it against both rules above and rewrite any choice that stands out.`;
 
 async function buildCourseDigest(courseId: string): Promise<{ title: string; digest: string }> {
   const course = await prisma.course.findUniqueOrThrow({

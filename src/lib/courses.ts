@@ -258,10 +258,12 @@ export async function submitFinalExamAttempt(
   });
 
   let certificateIssued = false;
+  let certificate = null;
   if (result.passed) {
     const outcome = await issueCertificateIfEligible(userId, courseId);
     certificateIssued = outcome.certificateIssued;
+    certificate = outcome.certificate;
   }
 
-  return { ...result, certificateIssued };
+  return { ...result, certificateIssued, certificate };
 }

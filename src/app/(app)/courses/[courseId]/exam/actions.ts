@@ -20,11 +20,16 @@ export async function submitFinalExamAction(formData: FormData) {
   }
 
   const user = await requireUser();
-  await submitFinalExamAttempt(user.id, courseId, answers);
+  const outcome = await submitFinalExamAttempt(user.id, courseId, answers);
 
   revalidatePath(`/courses/${courseId}`);
   revalidatePath("/courses");
   revalidatePath("/certificates");
   revalidatePath("/notifications");
+
+  if (outcome.certificate) {
+    const celebrate = outcome.certificateIssued ? "?celebrate=1" : "";
+    redirect(`/certificates/${outcome.certificate.id}${celebrate}`);
+  }
   redirect(`/courses/${courseId}`);
 }

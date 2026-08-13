@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ArrowLeft } from "lucide-react";
 import { PrintButton } from "./print-button";
 import { AddToLinkedInButton } from "@/components/add-to-linkedin-button";
 import { CertificateCard } from "@/components/certificate-card";
+import { CertificateCelebration } from "@/components/certificate-celebration";
 
 export default async function CertificateDetailPage({
   params,
@@ -25,6 +27,10 @@ export default async function CertificateDetailPage({
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
+      <Suspense fallback={null}>
+        <CertificateCelebration />
+      </Suspense>
+
       <div className="flex items-center justify-between print:hidden">
         <Link
           href="/certificates"

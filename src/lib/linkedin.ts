@@ -1,10 +1,6 @@
 // Zeni's LinkedIn Company Page organization id (linkedin.com/company/zeni).
 export const LINKEDIN_ORG_ID = "40774199";
 
-// TODO: replace with the certification app's real deployed domain (no
-// trailing slash) once it has one.
-export const OUR_DOMAIN = "https://certification.zeni.ai";
-
 export type LinkedInCertificateInput = {
   courseName: string;
   certNumber: string;
@@ -18,8 +14,10 @@ export type LinkedInCertificateInput = {
  * "Add a license or certification to your profile" → share link format):
  *
  *   https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME
- *     &name=...&organizationId=...&issueYear=...&issueMonth=...
- *     &certUrl=...&certId=...
+ *     &name=...&organizationId=...&issueYear=...&issueMonth=...&certId=...
+ *
+ * Deliberately omits `certUrl` — the Credential URL field is left blank for
+ * the user to fill in (or skip) themselves, rather than prefilled.
  *
  * Every value is passed through URLSearchParams — never string-concatenated —
  * so a course name, cert number, etc. can never break or inject into the
@@ -28,7 +26,6 @@ export type LinkedInCertificateInput = {
 export function buildLinkedInAddCertificateUrl({
   courseName,
   certNumber,
-  publicId,
   issuedAt,
 }: LinkedInCertificateInput): string {
   // Date#getMonth() is 0-indexed (January = 0); LinkedIn's certification
@@ -36,15 +33,12 @@ export function buildLinkedInAddCertificateUrl({
   const issueMonth = issuedAt.getMonth() + 1;
   const issueYear = issuedAt.getFullYear();
 
-  const certUrl = `${OUR_DOMAIN}/certificates/verify/${publicId}`;
-
   const params = new URLSearchParams({
     startTask: "CERTIFICATION_NAME",
     name: courseName,
     organizationId: LINKEDIN_ORG_ID,
     issueYear: String(issueYear),
     issueMonth: String(issueMonth),
-    certUrl,
     certId: certNumber,
   });
 
