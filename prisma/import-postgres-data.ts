@@ -2,9 +2,11 @@
 // export-sqlite-data.ts) into the new Postgres database. Run against an
 // empty, freshly-migrated Postgres DB — inserts in FK-safe order, preserving
 // original ids so relations stay intact.
-import "dotenv/config";
 import { config as loadDotenv } from "dotenv";
+const shellDatabaseUrl = process.env.DATABASE_URL || undefined;
+loadDotenv();
 loadDotenv({ path: ".env.local", override: true });
+if (shellDatabaseUrl) process.env.DATABASE_URL = shellDatabaseUrl;
 
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
