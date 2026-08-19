@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useState, useTransition } from "react";
 import { updateUserRoleAction } from "./actions";
 import {
   Select,
@@ -19,25 +19,39 @@ export function RoleSelect({
   role: "ADMIN" | "USER";
   disabled?: boolean;
 }) {
-  const formRef = useRef<HTMLFormElement>(null);
+  const [value, setValue] = useState(role);
+  const [isPending, startTransition] = useTransition();
+
+  function handleValueChange(newValue: unknown) {
+    const nextRole = String(newValue) as "ADMIN" | "USER";
+    setValue(nextRole);
+
+    // Build the FormData from the value the callback just handed us, rather
+    // than reading it back off the form's hidden input via requestSubmit() —
+    // that hidden input hadn't finished updating yet by the time the submit
+    // fired, so the server was silently receiving the *previous* role.
+    const formData = new FormData();
+    formData.set("userId", userId);
+    formData.set("role", nextRole);
+    startTransition(() => {
+      updateUserRoleAction(formData);
+    });
+  }
 
   return (
-    <form ref={formRef} action={updateUserRoleAction}>
-      <input type="hidden" name="userId" value={userId} />
-      <Select
-        name="role"
-        defaultValue={role}
-        disabled={disabled}
-        onValueChange={() => formRef.current?.requestSubmit()}
-      >
-        <SelectTrigger size="sm" className="w-32">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="USER">Member</SelectItem>
-          <SelectItem value="ADMIN">Admin</SelectItem>
-        </SelectContent>
-      </Select>
-    </form>
+    <Select
+      name="role"
+      value={value}
+      disabled={disabled || isPending}
+      onValueChange={handleValueChange}
+    >
+      <SelectTrigger size="sm" className="w-32">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="USER">Member</SelectItem>
+        <SelectItem value="ADMIN">Admin</SelectItem>
+      </SelectContent>
+    </Select>
   );
 }
