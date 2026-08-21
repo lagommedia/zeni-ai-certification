@@ -1,6 +1,8 @@
 import "server-only";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { EnrollmentStatus } from "@/generated/prisma/client";
+import { postCertificateCelebration } from "@/lib/slack";
 
 export function certNumber(courseId: string, userId: string) {
   return `ZC-${courseId.slice(-6).toUpperCase()}${userId.slice(-4).toUpperCase()}`;
@@ -110,6 +112,21 @@ export async function issueCertificateIfEligible(userId: string, courseId: strin
       type: "CERTIFICATE",
     },
   });
+
+  const recipient = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  // Rendering the celebration GIF takes real time — don't make the student
+  // wait on it before they see their certificate. Runs after the response
+  // is sent, still guaranteed to complete before the function terminates.
+  after(() =>
+    postCertificateCelebration({
+      recipientName: recipient.name,
+      recipientEmail: recipient.email,
+      courseTitle: course.title,
+      courseCategory: course.category,
+      certNumber: certificate.certNumber,
+      issuedAt: certificate.issuedAt,
+    })
+  );
 
   return { certificateIssued: true, certificate };
 }
