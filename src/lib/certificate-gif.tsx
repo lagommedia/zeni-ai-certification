@@ -1,5 +1,5 @@
 import "server-only";
-import sharp from "sharp";
+import { PNG } from "pngjs";
 import { GIFEncoder, quantize, applyPalette } from "gifenc";
 import { renderCertificateImage, type CertificateImageInput } from "@/lib/certificate-image";
 
@@ -86,9 +86,10 @@ function drawPiece(
  *  frame by frame and encodes the sequence as an animated GIF. */
 export async function renderCertificateCelebrationGif(input: CertificateImageInput): Promise<Buffer> {
   const basePng = await renderCertificateImage(input);
-  const { data, info } = await sharp(basePng).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const width = info.width;
-  const height = info.height;
+  // Pure-JS decode (no native binary) — sharp's libvips .so wasn't reliably
+  // loading in Vercel's serverless runtime, which took down every page that
+  // imports this module transitively, not just the Slack posting path.
+  const { data, width, height } = PNG.sync.read(basePng);
 
   const pieces = makeConfetti(width, height);
   const gif = GIFEncoder();

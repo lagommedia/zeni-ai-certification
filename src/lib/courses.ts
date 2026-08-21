@@ -2,7 +2,6 @@ import "server-only";
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { EnrollmentStatus } from "@/generated/prisma/client";
-import { postCertificateCelebration } from "@/lib/slack";
 
 export function certNumber(courseId: string, userId: string) {
   return `ZC-${courseId.slice(-6).toUpperCase()}${userId.slice(-4).toUpperCase()}`;
@@ -117,16 +116,21 @@ export async function issueCertificateIfEligible(userId: string, courseId: strin
   // Rendering the celebration GIF takes real time — don't make the student
   // wait on it before they see their certificate. Runs after the response
   // is sent, still guaranteed to complete before the function terminates.
-  after(() =>
-    postCertificateCelebration({
+  // Imported dynamically (not at module top-level) so this module's whole
+  // dependency chain — GIF rendering included — is only ever loaded for a
+  // request that actually issues a certificate, never for every page that
+  // merely imports something else from this file.
+  after(async () => {
+    const { postCertificateCelebration } = await import("@/lib/slack");
+    await postCertificateCelebration({
       recipientName: recipient.name,
       recipientEmail: recipient.email,
       courseTitle: course.title,
       courseCategory: course.category,
       certNumber: certificate.certNumber,
       issuedAt: certificate.issuedAt,
-    })
-  );
+    });
+  });
 
   return { certificateIssued: true, certificate };
 }
