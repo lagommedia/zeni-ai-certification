@@ -9,13 +9,18 @@ import { NAV_ITEMS } from "@/lib/nav";
 export function AppSidebar({
   role,
   unreadCount,
+  canViewAnalytics,
 }: {
   role: "ADMIN" | "USER";
   unreadCount: number;
+  canViewAnalytics: boolean;
 }) {
   const pathname = usePathname();
 
-  const items = NAV_ITEMS.filter((item) => !item.adminOnly || role === "ADMIN");
+  const items = NAV_ITEMS.filter((item) => {
+    if (item.analyticsAccess) return canViewAnalytics;
+    return !item.adminOnly || role === "ADMIN";
+  });
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex">

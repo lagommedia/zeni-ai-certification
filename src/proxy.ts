@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, decodeSession } from "@/lib/session";
 
-const ADMIN_ONLY_PREFIXES = ["/settings", "/analytics"];
+// /analytics is deliberately not in this list — Team Leads (a per-team
+// designation, not a Role value) can also access it. The proxy can't know
+// team-lead status from the cheap signed cookie alone, so the authoritative
+// admin-or-team-lead check happens in the page itself against the database.
+const ADMIN_ONLY_PREFIXES = ["/settings"];
 const PUBLIC_PATHS = ["/login"];
 // Fully public regardless of auth state — no redirect either direction.
 // Meant for third parties (e.g. LinkedIn, a recruiter) with no Zeni account.

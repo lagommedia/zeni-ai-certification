@@ -19,13 +19,18 @@ import {
 export function MobileNav({
   role,
   unreadCount,
+  canViewAnalytics,
 }: {
   role: "ADMIN" | "USER";
   unreadCount: number;
+  canViewAnalytics: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
-  const items = NAV_ITEMS.filter((item) => !item.adminOnly || role === "ADMIN");
+  const items = NAV_ITEMS.filter((item) => {
+    if (item.analyticsAccess) return canViewAnalytics;
+    return !item.adminOnly || role === "ADMIN";
+  });
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

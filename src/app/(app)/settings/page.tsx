@@ -16,8 +16,13 @@ import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { PublishSwitch } from "./publish-switch";
 import { RoleSelect } from "./role-select";
 import { TitleInput } from "./title-input";
+import { TeamSelect } from "./team-select";
+import { TeamLeadSelect } from "./team-lead-select";
+import { TeamNameInput } from "./team-name-input";
 import { NewCourseDialog } from "./new-course-dialog";
+import { NewTeamDialog } from "./new-team-dialog";
 import { deleteCourseAction } from "./actions";
+import { deleteTeamAction } from "./teams-actions";
 import { Pencil, Trash2 } from "lucide-react";
 
 const LEVEL_LABEL: Record<string, string> = {
@@ -31,12 +36,16 @@ export default async function SettingsPage() {
   if (!user) return null;
   if (user.role !== "ADMIN") redirect("/courses");
 
-  const [courses, users] = await Promise.all([
+  const [courses, users, teams] = await Promise.all([
     prisma.course.findMany({
       orderBy: { createdAt: "asc" },
       include: { modules: { select: { id: true } }, enrollments: { select: { id: true } } },
     }),
     prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
+    prisma.team.findMany({
+      orderBy: { createdAt: "asc" },
+      include: { members: { select: { id: true, name: true } } },
+    }),
   ]);
 
   return (
@@ -114,7 +123,63 @@ export default async function SettingsPage() {
       </section>
 
       <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-semibold">Team</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Teams</h2>
+          <NewTeamDialog />
+        </div>
+        {teams.length === 0 ? (
+          <p className="rounded-xl border border-dashed bg-card px-5 py-6 text-center text-sm text-muted-foreground">
+            No teams yet — create one, then assign members to it below.
+          </p>
+        ) : (
+          <div className="overflow-hidden rounded-xl border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Team</TableHead>
+                  <TableHead>Members</TableHead>
+                  <TableHead>Lead</TableHead>
+                  <TableHead className="text-right">Delete</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {teams.map((team) => (
+                  <TableRow key={team.id}>
+                    <TableCell className="font-medium">
+                      <TeamNameInput teamId={team.id} name={team.name} />
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{team.members.length}</TableCell>
+                    <TableCell>
+                      <TeamLeadSelect
+                        teamId={team.id}
+                        leadUserId={team.leadUserId}
+                        members={team.members}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <form action={deleteTeamAction} className="flex justify-end">
+                        <input type="hidden" name="teamId" value={team.id} />
+                        <ConfirmSubmitButton
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          confirmMessage={`Delete "${team.name}"? Members keep their accounts but are no longer on a team.`}
+                        >
+                          <Trash2 className="size-3.5" />
+                          Delete
+                        </ConfirmSubmitButton>
+                      </form>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-lg font-semibold">Members</h2>
         <div className="overflow-hidden rounded-xl border bg-card">
           <Table>
             <TableHeader>
@@ -122,6 +187,7 @@ export default async function SettingsPage() {
                 <TableHead>Member</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Title</TableHead>
+                <TableHead>Team</TableHead>
                 <TableHead className="text-right">Role</TableHead>
               </TableRow>
             </TableHeader>
@@ -147,6 +213,9 @@ export default async function SettingsPage() {
                   <TableCell className="text-muted-foreground">{member.email}</TableCell>
                   <TableCell className="text-muted-foreground">
                     <TitleInput userId={member.id} title={member.title} />
+                  </TableCell>
+                  <TableCell>
+                    <TeamSelect userId={member.id} teamId={member.teamId} teams={teams} />
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end">

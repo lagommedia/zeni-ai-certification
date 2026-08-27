@@ -17,13 +17,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     where: { userId: user.id, read: false },
   });
 
+  // Team Lead is a per-team designation, not a Role — Admins always see
+  // Analytics; everyone else only sees it if they lead some team.
+  const canViewAnalytics =
+    user.role === "ADMIN" ||
+    (await prisma.team.findUnique({ where: { leadUserId: user.id }, select: { id: true } })) !==
+      null;
+
   return (
     <div className="flex min-h-svh w-full">
-      <AppSidebar role={user.role} unreadCount={unreadCount} />
+      <AppSidebar role={user.role} unreadCount={unreadCount} canViewAnalytics={canViewAnalytics} />
       <div className="flex min-h-svh flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-15 items-center justify-between border-b bg-card/85 px-4 backdrop-blur-md md:px-7">
           <div className="flex items-center gap-2">
-            <MobileNav role={user.role} unreadCount={unreadCount} />
+            <MobileNav role={user.role} unreadCount={unreadCount} canViewAnalytics={canViewAnalytics} />
           </div>
           <UserMenu
             user={{

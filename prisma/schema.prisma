@@ -46,6 +46,23 @@ model User {
   certificates  Certificate[]
   notifications Notification[]
   quizAttempts  QuizAttempt[]
+  teamId        String?
+  team          Team?          @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
+  // Set only on the one team (if any) this user is the designated lead of —
+  // distinct from `team` above, which is the team they're a member of.
+  // Modeled as a per-team designation rather than a third Role value, since
+  // a Team Lead's access is scoped to their own team, not a platform-wide
+  // permission tier the way ADMIN is.
+  ledTeam       Team?          @relation("TeamLead")
+}
+
+model Team {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  createdAt  DateTime @default(now())
+  members    User[]   @relation("TeamMembers")
+  leadUserId String?  @unique
+  lead       User?    @relation("TeamLead", fields: [leadUserId], references: [id], onDelete: SetNull)
 }
 
 model Course {
