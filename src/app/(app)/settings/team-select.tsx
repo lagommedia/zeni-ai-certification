@@ -21,6 +21,7 @@ export function TeamSelect({
 }) {
   const [value, setValue] = useState(teamId ?? "none");
   const [isPending, startTransition] = useTransition();
+  const teamsById = new Map(teams.map((team) => [team.id, team.name]));
 
   function handleValueChange(newValue: unknown) {
     const nextTeamId = String(newValue);
@@ -37,7 +38,11 @@ export function TeamSelect({
   return (
     <Select value={value} disabled={isPending} onValueChange={handleValueChange}>
       <SelectTrigger size="sm" className="w-40">
-        <SelectValue />
+        <SelectValue>
+          {(currentTeamId: string) =>
+            currentTeamId === "none" ? "No team" : (teamsById.get(currentTeamId) ?? "No team")
+          }
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="none">No team</SelectItem>
