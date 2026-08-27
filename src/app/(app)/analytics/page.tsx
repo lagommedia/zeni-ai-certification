@@ -2,18 +2,11 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { progressPercent } from "@/lib/courses";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Award, BookOpen, CheckCircle2, Users } from "lucide-react";
+import { CoursePerformanceTable, type CoursePerformanceRow } from "./course-performance-table";
+import { MemberProgressTable, type MemberProgressRow } from "./member-progress-table";
+import { TeamPerformanceTable, type TeamPerformanceRow } from "./team-performance-table";
+import type { EnrollmentStatusValue } from "./enrollment-status";
 
 function StatTile({
   label,
@@ -57,16 +50,23 @@ export default async function AnalyticsPage() {
     : ledTeam!.members;
   const cohortIds = new Set(cohort.map((u) => u.id));
 
-  const [courses, certificateCount, enrollments, teams] = await Promise.all([
+  const [courses, certificates, teams] = await Promise.all([
+    // Enrollments come back with the enrolled user attached so both the
+    // per-course member breakdown (below) and the per-member course
+    // breakdown can be built from this one query instead of N+1 lookups.
     prisma.course.findMany({
       orderBy: { createdAt: "asc" },
       include: {
         modules: { select: { id: true } },
-        enrollments: { include: { progress: { where: { completed: true } } } },
+        enrollments: {
+          include: { user: { select: { id: true, name: true, avatarColor: true, role: true } } },
+        },
       },
     }),
-    prisma.certificate.count({ where: { userId: { in: [...cohortIds] } } }),
-    prisma.enrollment.findMany({ where: { userId: { in: [...cohortIds] } } }),
+    prisma.certificate.findMany({
+      where: { userId: { in: [...cohortIds] } },
+      select: { userId: true },
+    }),
     // Only admins get the cross-team rollup — a team lead's page never
     // queries other teams' membership at all.
     isAdmin
@@ -77,15 +77,46 @@ export default async function AnalyticsPage() {
       : Promise.resolve([]),
   ]);
 
-  const totalEnrollments = enrollments.length;
-  const completedEnrollments = enrollments.filter((e) => e.status === "COMPLETED").length;
-  const overallCompletionRate = progressPercent(completedEnrollments, totalEnrollments);
+  const certsByUser = new Map<string, number>();
+  for (const cert of certificates) {
+    certsByUser.set(cert.userId, (certsByUser.get(cert.userId) ?? 0) + 1);
+  }
 
-  const coursePerformance = courses
+  // enrollmentByUserCourse["userId:courseId"] -> status, built once so every
+  // per-member and per-course breakdown below is an O(1) lookup instead of
+  // a fresh query.
+  const enrollmentByUserCourse = new Map<string, EnrollmentStatusValue>();
+  for (const course of courses) {
+    for (const enrollment of course.enrollments) {
+      enrollmentByUserCourse.set(`${enrollment.userId}:${course.id}`, enrollment.status);
+    }
+  }
+
+  const cohortEnrollments = courses.flatMap((course) =>
+    course.enrollments.filter((e) => cohortIds.has(e.userId))
+  );
+  const totalEnrollments = cohortEnrollments.length;
+  const completedEnrollments = cohortEnrollments.filter((e) => e.status === "COMPLETED").length;
+  const overallCompletionRate = progressPercent(completedEnrollments, totalEnrollments);
+  const certificateCount = [...certsByUser.values()].reduce((sum, n) => sum + n, 0);
+
+  const coursePerformance: CoursePerformanceRow[] = courses
     .map((course) => {
-      const cohortEnrollments = course.enrollments.filter((e) => cohortIds.has(e.userId));
-      const enrolled = cohortEnrollments.length;
-      const completed = cohortEnrollments.filter((e) => e.status === "COMPLETED").length;
+      // "Enrolled" counts anyone with an Enrollment row for this course at
+      // all (created the moment they first open it — see ensureEnrollment
+      // in lib/courses.ts), same definition this stat always used. That's
+      // distinct from the per-member `status` below, where a fresh row is
+      // still "NOT_STARTED" until they complete something.
+      const courseCohortRows = course.enrollments.filter((e) => cohortIds.has(e.userId));
+      const enrolled = courseCohortRows.length;
+      const completed = courseCohortRows.filter((e) => e.status === "COMPLETED").length;
+      const members = cohort.map((member) => ({
+        id: member.id,
+        name: member.name,
+        avatarColor: member.avatarColor,
+        role: member.role,
+        status: enrollmentByUserCourse.get(`${member.id}:${course.id}`) ?? ("NOT_STARTED" as EnrollmentStatusValue),
+      }));
       return {
         id: course.id,
         title: course.title,
@@ -93,44 +124,53 @@ export default async function AnalyticsPage() {
         enrolled,
         completed,
         rate: progressPercent(completed, enrolled),
+        members,
       };
     })
     .sort((a, b) => b.enrolled - a.enrolled);
 
-  const memberProgress = await Promise.all(
-    cohort.map(async (member) => {
-      const memberEnrollments = await prisma.enrollment.findMany({ where: { userId: member.id } });
-      const certs = await prisma.certificate.count({ where: { userId: member.id } });
-      return {
-        id: member.id,
-        name: member.name,
-        avatarColor: member.avatarColor,
-        role: member.role,
-        completed: memberEnrollments.filter((e) => e.status === "COMPLETED").length,
-        inProgress: memberEnrollments.filter((e) => e.status === "IN_PROGRESS").length,
-        certificates: certs,
-      };
-    })
-  );
+  const memberProgress: MemberProgressRow[] = cohort.map((member) => {
+    const memberCourses = courses.map((course) => ({
+      id: course.id,
+      title: course.title,
+      category: course.category,
+      status: enrollmentByUserCourse.get(`${member.id}:${course.id}`) ?? ("NOT_STARTED" as EnrollmentStatusValue),
+    }));
+    return {
+      id: member.id,
+      name: member.name,
+      avatarColor: member.avatarColor,
+      role: member.role,
+      completed: memberCourses.filter((c) => c.status === "COMPLETED").length,
+      inProgress: memberCourses.filter((c) => c.status === "IN_PROGRESS").length,
+      certificates: certsByUser.get(member.id) ?? 0,
+      courses: memberCourses,
+    };
+  });
+  const memberProgressById = new Map(memberProgress.map((m) => [m.id, m]));
 
-  const teamPerformance = await Promise.all(
-    teams.map(async (team) => {
-      const memberIds = team.members.map((m) => m.id);
-      const teamEnrollments = memberIds.length
-        ? await prisma.enrollment.findMany({ where: { userId: { in: memberIds } } })
-        : [];
-      const completed = teamEnrollments.filter((e) => e.status === "COMPLETED").length;
-      return {
-        id: team.id,
-        name: team.name,
-        leadName: team.lead?.name ?? null,
-        memberCount: memberIds.length,
-        completed,
-        total: teamEnrollments.length,
-        rate: progressPercent(completed, teamEnrollments.length),
-      };
-    })
-  );
+  // Same "any Enrollment row counts" definition as coursePerformance above,
+  // just summed across every course for the team's members instead of
+  // scoped to one course.
+  const allEnrollmentRows = courses.flatMap((course) => course.enrollments);
+  const teamPerformance: TeamPerformanceRow[] = teams.map((team) => {
+    const memberIds = new Set(team.members.map((m) => m.id));
+    const teamEnrollments = allEnrollmentRows.filter((e) => memberIds.has(e.userId));
+    const completed = teamEnrollments.filter((e) => e.status === "COMPLETED").length;
+    const members = team.members
+      .map((m) => memberProgressById.get(m.id))
+      .filter((m): m is MemberProgressRow => m !== undefined);
+    return {
+      id: team.id,
+      name: team.name,
+      leadName: team.lead?.name ?? null,
+      memberCount: team.members.length,
+      completed,
+      total: teamEnrollments.length,
+      rate: progressPercent(completed, teamEnrollments.length),
+      members,
+    };
+  });
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-8">
@@ -162,138 +202,19 @@ export default async function AnalyticsPage() {
               No teams set up yet — create one in Settings to see a per-team breakdown here.
             </p>
           ) : (
-            <div className="overflow-hidden rounded-xl border bg-card">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Team</TableHead>
-                    <TableHead>Lead</TableHead>
-                    <TableHead className="text-right">Members</TableHead>
-                    <TableHead className="text-right">Completed</TableHead>
-                    <TableHead className="w-56">Completion rate</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {teamPerformance.map((team) => (
-                    <TableRow key={team.id}>
-                      <TableCell className="font-medium">{team.name}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {team.leadName ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {team.memberCount}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {team.completed}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Progress value={team.rate} className="h-1.5" />
-                          <span className="w-9 shrink-0 text-right text-xs text-muted-foreground">
-                            {team.rate}%
-                          </span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <TeamPerformanceTable teams={teamPerformance} />
           )}
         </section>
       )}
 
       <section className="flex flex-col gap-4">
         <h2 className="text-lg font-semibold">Course performance</h2>
-        <div className="overflow-hidden rounded-xl border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Course</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead className="text-right">Enrolled</TableHead>
-                <TableHead className="text-right">Completed</TableHead>
-                <TableHead className="w-56">Completion rate</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {coursePerformance.map((course) => (
-                <TableRow key={course.id}>
-                  <TableCell className="font-medium">{course.title}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{course.category}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    {course.enrolled}
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    {course.completed}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Progress value={course.rate} className="h-1.5" />
-                      <span className="w-9 shrink-0 text-right text-xs text-muted-foreground">
-                        {course.rate}%
-                      </span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <CoursePerformanceTable courses={coursePerformance} />
       </section>
 
       <section className="flex flex-col gap-4">
         <h2 className="text-lg font-semibold">{isAdmin ? "Member progress" : "Team members"}</h2>
-        <div className="overflow-hidden rounded-xl border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Member</TableHead>
-                <TableHead className="text-right">Completed</TableHead>
-                <TableHead className="text-right">In progress</TableHead>
-                <TableHead className="text-right">Certificates</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {memberProgress.map((member) => (
-                <TableRow key={member.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Avatar className="size-7">
-                        <AvatarFallback
-                          style={{ backgroundColor: member.avatarColor }}
-                          className="text-xs font-medium text-onyx"
-                        >
-                          {member.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="font-medium">{member.name}</span>
-                      {member.role === "ADMIN" && (
-                        <Badge variant="outline" className="text-[10px]">
-                          Admin
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    {member.completed}
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    {member.inProgress}
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    {member.certificates}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <MemberProgressTable members={memberProgress} />
       </section>
     </div>
   );
