@@ -1,12 +1,35 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { progressPercent } from "@/lib/courses";
+import { cn } from "@/lib/utils";
 import { Award, BookOpen, CheckCircle2, Users } from "lucide-react";
 import { CoursePerformanceTable, type CoursePerformanceRow } from "./course-performance-table";
 import { MemberProgressTable, type MemberProgressRow } from "./member-progress-table";
 import { TeamPerformanceTable, type TeamPerformanceRow } from "./team-performance-table";
 import type { EnrollmentStatusValue } from "./enrollment-status";
+
+// A plain-link segmented control rather than the client-side Tabs
+// primitive — the two views run different server queries, so switching is
+// a real navigation (?view=team) instead of client-side panel swapping.
+function ViewToggle({ active }: { active: "admin" | "team" }) {
+  const optionClass = (isActive: boolean) =>
+    cn(
+      "inline-flex h-full items-center justify-center rounded-md px-3 text-sm font-medium transition-all",
+      isActive ? "bg-background text-foreground shadow-sm" : "text-foreground/60 hover:text-foreground"
+    );
+  return (
+    <div className="inline-flex h-8 w-fit shrink-0 items-center justify-center rounded-lg bg-muted p-[3px] text-muted-foreground">
+      <Link href="?view=admin" className={optionClass(active === "admin")}>
+        Admin view
+      </Link>
+      <Link href="?view=team" className={optionClass(active === "team")}>
+        Team Lead view
+      </Link>
+    </div>
+  );
+}
 
 function StatTile({
   label,
@@ -30,22 +53,33 @@ function StatTile({
   );
 }
 
-export default async function AnalyticsPage() {
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user) return null;
 
   const isAdmin = user.role === "ADMIN";
-  const ledTeam = isAdmin
-    ? null
-    : await prisma.team.findUnique({
-        where: { leadUserId: user.id },
-        include: { members: { select: { id: true, name: true, avatarColor: true, role: true } } },
-      });
+  // Looked up regardless of role — an admin who also leads a team can
+  // toggle into that team's scoped view; a non-admin lead is locked into it.
+  const ledTeam = await prisma.team.findUnique({
+    where: { leadUserId: user.id },
+    include: { members: { select: { id: true, name: true, avatarColor: true, role: true } } },
+  });
 
   // Anyone else — a regular member, or a lead of no team — has no business here.
   if (!isAdmin && !ledTeam) redirect("/courses");
 
-  const cohort = isAdmin
+  const canToggleView = isAdmin && ledTeam !== null;
+  const { view: requestedView } = await searchParams;
+  // Non-admin leads always get the team view. Admins default to the admin
+  // view unless they've explicitly switched via ?view=team — and can only
+  // do that at all if they actually lead a team.
+  const showAdminView = isAdmin && !(canToggleView && requestedView === "team");
+
+  const cohort = showAdminView
     ? await prisma.user.findMany({ orderBy: { createdAt: "asc" } })
     : ledTeam!.members;
   const cohortIds = new Set(cohort.map((u) => u.id));
@@ -67,9 +101,10 @@ export default async function AnalyticsPage() {
       where: { userId: { in: [...cohortIds] } },
       select: { userId: true },
     }),
-    // Only admins get the cross-team rollup — a team lead's page never
-    // queries other teams' membership at all.
-    isAdmin
+    // Only the admin view gets the cross-team rollup — the team view (a
+    // real lead's, or an admin toggled into it) never queries other teams'
+    // membership at all.
+    showAdminView
       ? prisma.team.findMany({
           orderBy: { createdAt: "asc" },
           include: { members: { select: { id: true } }, lead: { select: { name: true } } },
@@ -174,13 +209,16 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-8">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-h4 font-medium text-sapphire">Analytics</h1>
-        <p className="text-sm text-muted-foreground">
-          {isAdmin
-            ? "Certification progress across your team."
-            : `Certification progress for ${ledTeam!.name}.`}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-h4 font-medium text-sapphire">Analytics</h1>
+          <p className="text-sm text-muted-foreground">
+            {showAdminView
+              ? "Certification progress across your team."
+              : `Certification progress for ${ledTeam!.name}.`}
+          </p>
+        </div>
+        {canToggleView && <ViewToggle active={showAdminView ? "admin" : "team"} />}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -194,7 +232,7 @@ export default async function AnalyticsPage() {
         />
       </div>
 
-      {isAdmin && (
+      {showAdminView && (
         <section className="flex flex-col gap-4">
           <h2 className="text-lg font-semibold">Team performance</h2>
           {teamPerformance.length === 0 ? (
@@ -213,7 +251,7 @@ export default async function AnalyticsPage() {
       </section>
 
       <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-semibold">{isAdmin ? "Member progress" : "Team members"}</h2>
+        <h2 className="text-lg font-semibold">{showAdminView ? "Member progress" : "Team members"}</h2>
         <MemberProgressTable members={memberProgress} />
       </section>
     </div>
