@@ -8,6 +8,8 @@ import { Award, BookOpen, CheckCircle2, Users } from "lucide-react";
 import { CoursePerformanceTable, type CoursePerformanceRow } from "./course-performance-table";
 import { MemberProgressTable, type MemberProgressRow } from "./member-progress-table";
 import { TeamPerformanceTable, type TeamPerformanceRow } from "./team-performance-table";
+import { TimelineChart } from "./timeline-chart";
+import { buildEnrollmentTimeline } from "./timeline";
 import type { EnrollmentStatusValue } from "./enrollment-status";
 
 // A plain-link segmented control rather than the client-side Tabs
@@ -134,6 +136,7 @@ export default async function AnalyticsPage({
   const completedEnrollments = cohortEnrollments.filter((e) => e.status === "COMPLETED").length;
   const overallCompletionRate = progressPercent(completedEnrollments, totalEnrollments);
   const certificateCount = [...certsByUser.values()].reduce((sum, n) => sum + n, 0);
+  const enrollmentTimeline = buildEnrollmentTimeline(cohortEnrollments);
 
   const coursePerformance: CoursePerformanceRow[] = courses
     .map((course) => {
@@ -231,6 +234,11 @@ export default async function AnalyticsPage({
           icon={CheckCircle2}
         />
       </div>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-lg font-semibold">Enrollment timeline</h2>
+        <TimelineChart data={enrollmentTimeline} />
+      </section>
 
       {showAdminView && (
         <section className="flex flex-col gap-4">
