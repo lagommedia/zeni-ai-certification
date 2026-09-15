@@ -25,6 +25,32 @@ async function resolveMention(client: WebClient, email: string, fallbackName: st
   return `*${fallbackName}*`;
 }
 
+/**
+ * Best-effort Slack profile photo lookup by email, for a small fixed set of
+ * users (e.g. a top-3 podium) — one lookupByEmail call per address, so this
+ * is not meant for whole-roster use. Never throws; a miss for any address
+ * (no Slack account, no photo, missing token) just omits that entry so
+ * callers fall back to their initials avatar.
+ */
+export async function getSlackAvatarUrls(emails: string[]): Promise<Map<string, string>> {
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token || emails.length === 0) return new Map();
+
+  const client = new WebClient(token);
+  const entries = await Promise.all(
+    emails.map(async (email) => {
+      try {
+        const result = await client.users.lookupByEmail({ email });
+        const url = result.user?.profile?.image_192;
+        return url ? ([email, url] as const) : null;
+      } catch {
+        return null;
+      }
+    })
+  );
+  return new Map(entries.filter((e): e is [string, string] => e !== null));
+}
+
 function buildMessage(mention: string, courseTitle: string) {
   return `:tada: Congrats to ${mention} on completing *${courseTitle}*! :mortar_board:`;
 }
