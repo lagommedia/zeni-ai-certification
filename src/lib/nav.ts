@@ -1,4 +1,4 @@
-import { Bell, BookOpen, Award, Settings, BarChart3, type LucideIcon } from "lucide-react";
+import { Bell, BookOpen, Award, Settings, BarChart3, Trophy, type LucideIcon } from "lucide-react";
 
 export type NavItem = {
   href: string;
@@ -15,6 +15,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/notifications", label: "Notifications", icon: Bell, showUnreadBadge: true },
   { href: "/courses", label: "Courses", icon: BookOpen },
   { href: "/certificates", label: "Certificates", icon: Award },
+  { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/settings", label: "Settings", icon: Settings, adminOnly: true },
   { href: "/analytics", label: "Analytics", icon: BarChart3, analyticsAccess: true },
 ];
