@@ -18,8 +18,6 @@ const COLOR_CYCLE = ["#366170", "#97C3B9", "#EEBA7D", "#C9ABC7", "#AD584A", "#16
 
 export type CourseBuilderState = { error: string | null };
 
-export const initialCourseBuilderState: CourseBuilderState = { error: null };
-
 export async function generateCourseAction(
   _prevState: CourseBuilderState,
   formData: FormData

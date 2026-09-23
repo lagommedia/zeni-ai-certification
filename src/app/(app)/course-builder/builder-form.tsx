@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { generateCourseAction, initialCourseBuilderState } from "./actions";
+import { generateCourseAction, type CourseBuilderState } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,8 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { Loader2, Sparkles } from "lucide-react";
 
+const INITIAL_STATE: CourseBuilderState = { error: null };
+
 export function BuilderForm({ courses }: { courses: { id: string; title: string }[] }) {
-  const [state, formAction, isPending] = useActionState(generateCourseAction, initialCourseBuilderState);
+  const [state, formAction, isPending] = useActionState(generateCourseAction, INITIAL_STATE);
   const [mode, setMode] = useState<"new" | "existing">("new");
 
   const modeButtonClass = (active: boolean) =>
