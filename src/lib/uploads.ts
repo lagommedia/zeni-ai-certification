@@ -22,7 +22,7 @@ export async function saveUploadedFile(
   return { url: blob.url, name: file.name };
 }
 
-function isBlobUrl(url: string) {
+export function isBlobUrl(url: string) {
   try {
     return new URL(url).hostname.endsWith(".public.blob.vercel-storage.com");
   } catch {

@@ -23,7 +23,8 @@ import { NewCourseDialog } from "./new-course-dialog";
 import { NewTeamDialog } from "./new-team-dialog";
 import { deleteCourseAction } from "./actions";
 import { deleteTeamAction } from "./teams-actions";
-import { Pencil, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { FlaskConical, Pencil, Trash2 } from "lucide-react";
 
 const LEVEL_LABEL: Record<string, string> = {
   BEGINNER: "Beginner",
@@ -60,7 +61,13 @@ export default async function SettingsPage() {
       <section className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Courses</h2>
-          <NewCourseDialog />
+          <div className="flex items-center gap-2">
+            <Button render={<Link href="/settings/lab-progress" />} nativeButton={false} variant="outline">
+              <FlaskConical className="size-4" />
+              Lab progress
+            </Button>
+            <NewCourseDialog />
+          </div>
         </div>
         <div className="overflow-hidden rounded-xl border bg-card">
           <Table>

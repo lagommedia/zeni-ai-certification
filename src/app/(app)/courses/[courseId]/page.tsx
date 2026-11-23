@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { toggleModuleAction } from "./actions";
 import { isHonorCallout, OBJECTIVES_BLOCK_HEADING } from "@/lib/module-content";
+import { toLabAttemptView } from "@/lib/labs";
+import type { LabAttemptView } from "@/lib/lab-events";
 
 const LEVEL_LABEL: Record<string, string> = {
   BEGINNER: "Beginner",
@@ -54,6 +56,12 @@ export default async function CourseDetailPage({
   const progressRows = await prisma.moduleProgress.findMany({
     where: { enrollmentId: enrollment.id },
   });
+  const labBlockIds = course.modules.flatMap((m) => m.blocks.filter((b) => b.type === "LAB").map((b) => b.id));
+  const labAttemptRows = labBlockIds.length
+    ? await prisma.labAttempt.findMany({ where: { userId: user.id, blockId: { in: labBlockIds } } })
+    : [];
+  const labAttemptByBlockId: Record<string, LabAttemptView> = {};
+  for (const row of labAttemptRows) labAttemptByBlockId[row.blockId] = toLabAttemptView(row);
   const progressByModuleId = new Map(progressRows.map((p) => [p.moduleId, p]));
   const completedIds = new Set(progressRows.filter((p) => p.completed).map((p) => p.moduleId));
   const unlockedIds = getUnlockedModuleIds(
@@ -175,7 +183,10 @@ export default async function CourseDetailPage({
           const requiresHonorConfirm = hasQuiz && otherBlocks.some(isHonorCallout);
           const videoLocked = requiresVideoWatch && !videoWatched;
           const honorLocked = requiresHonorConfirm && !honorConfirmed;
-          const quizLocked = videoLocked || honorLocked;
+          const labLocked = otherBlocks.some(
+            (b) => b.type === "LAB" && b.labRequired && labAttemptByBlockId[b.id]?.status !== "COMPLETED"
+          );
+          const quizLocked = videoLocked || honorLocked || labLocked;
 
           return (
             <details
@@ -228,9 +239,16 @@ export default async function CourseDetailPage({
                         size="sm"
                         variant={completed ? "outline" : "default"}
                         className="w-full sm:w-auto"
+                        disabled={labLocked && !completed}
                       >
                         {completed ? "Mark incomplete" : "Mark complete"}
                       </Button>
+                      {labLocked && !completed && (
+                        <span className="mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
+                          <Lock className="size-3" />
+                          Finish the lab below to continue
+                        </span>
+                      )}
                     </form>
                   )}
 
@@ -241,7 +259,17 @@ export default async function CourseDetailPage({
                   )}
 
                   {otherBlocks.length > 0 && (
-                    <ModuleContent blocks={otherBlocks} moduleId={module.id} honorConfirmed={honorConfirmed} />
+                    <ModuleContent
+                      blocks={otherBlocks}
+                      moduleId={module.id}
+                      honorConfirmed={honorConfirmed}
+                      labLocked={labLocked}
+                      labContext={{
+                        courseTitle: course.title,
+                        moduleTitle: module.title,
+                        attempts: labAttemptByBlockId,
+                      }}
+                    />
                   )}
 
                   {hasQuiz && (
@@ -270,7 +298,13 @@ export default async function CourseDetailPage({
                               Watch the video above to unlock the quiz
                             </span>
                           )}
-                          {honorLocked && (
+                          {labLocked && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Lock className="size-3" />
+                              Finish the lab above to continue
+                            </span>
+                          )}
+                          {honorLocked && !labLocked && (
                             <span className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Lock className="size-3" />
                               Check &ldquo;Completed&rdquo; above to unlock the quiz

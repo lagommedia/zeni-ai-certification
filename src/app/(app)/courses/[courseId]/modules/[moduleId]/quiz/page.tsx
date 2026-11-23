@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureEnrollment, getUnlockedModuleIds } from "@/lib/courses";
+import { getUnmetRequiredLabs } from "@/lib/labs";
 import { resolveVideoEmbed } from "@/lib/video";
 import { isHonorCallout } from "@/lib/module-content";
 import { shuffle } from "@/lib/shuffle";
@@ -46,6 +47,8 @@ export default async function ModuleQuizPage({
 
   const requiresHonorConfirm = courseModule.blocks.some(isHonorCallout);
   if (requiresHonorConfirm && !moduleProgress?.honorConfirmed) redirect(`/courses/${courseId}`);
+
+  if ((await getUnmetRequiredLabs(user.id, moduleId)).length > 0) redirect(`/courses/${courseId}`);
 
   const orderedModules = await prisma.module.findMany({
     where: { courseId },

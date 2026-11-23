@@ -46,6 +46,7 @@ model User {
   certificates  Certificate[]
   notifications Notification[]
   quizAttempts  QuizAttempt[]
+  labAttempts   LabAttempt[]
   teamId        String?
   team          Team?          @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
   // Set only on the one team (if any) this user is the designated lead of —
@@ -85,25 +86,25 @@ model Course {
 }
 
 model Module {
-  id           String           @id @default(cuid())
-  courseId     String
-  course       Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  title        String
-  subtitle     String?
+  id            String           @id @default(cuid())
+  courseId      String
+  course        Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title         String
+  subtitle      String?
   // Legacy free-text blurb — superseded by the auto-managed "what you'll
   // learn" objectives block (see lib/module-content.ts), kept nullable for
   // modules seeded before that existed.
-  content      String?
-  videoUrl     String?
+  content       String?
+  videoUrl      String?
   // Original filename of a directly-uploaded video (videoUrl starting with
   // /uploads/) — shown in the admin editor instead of the random stored
   // name. Null for YouTube/Vimeo/Drive links or file URLs pasted in.
   videoFileName String?
-  order        Int
-  durationMins Int              @default(10)
-  progress     ModuleProgress[]
-  quiz         Quiz?
-  blocks       ContentBlock[]
+  order         Int
+  durationMins  Int              @default(10)
+  progress      ModuleProgress[]
+  quiz          Quiz?
+  blocks        ContentBlock[]
 
   @@index([courseId])
 }
@@ -116,6 +117,10 @@ enum ContentBlockType {
   // e.g. an example prompt the reader can copy elsewhere. Only `body` is
   // used; no heading/eyebrow, no variant.
   COPY_BLOCK
+  // A self-contained HTML practice lab (served through /labs/[blockId] in a
+  // sandboxed iframe). Reuses `heading` as the lab title, `body` as the
+  // description, and `fileUrl`/`fileName` for the uploaded lab HTML.
+  LAB
 }
 
 enum CalloutVariant {
@@ -131,36 +136,69 @@ enum CalloutVariant {
 // (supports **bold** and "- " bullet lines, parsed client-side — never
 // rendered as raw HTML).
 model ContentBlock {
-  id       String           @id @default(cuid())
-  moduleId String
-  module   Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  type     ContentBlockType
-  order    Int
-  heading  String?
-  body     String?
-  variant  CalloutVariant?
+  id          String           @id @default(cuid())
+  moduleId    String
+  module      Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  type        ContentBlockType
+  order       Int
+  heading     String?
+  body        String?
+  variant     CalloutVariant?
   // Optional downloadable attachment — currently only surfaced on CALLOUT
   // blocks (e.g. a sample file to test a "now you" prompt against).
   // fileUrl is the public path under /uploads; fileName is the original
   // filename, shown to the user and set as the download's suggested name.
-  fileUrl  String?
-  fileName String?
+  fileUrl     String?
+  fileName    String?
+  // LAB blocks only. `labId` is the id the lab file reports in its progress
+  // events (checked against incoming events when set); `labRequired` gates
+  // the module's completion on finishing the lab.
+  labId       String?
+  labRequired Boolean          @default(true)
+  labAttempts LabAttempt[]
 
   @@index([moduleId])
+}
+
+enum LabAttemptStatus {
+  STARTED
+  COMPLETED
+}
+
+// One row per learner per LAB block. Progress is reported by the learner's
+// browser (the lab posts events to the app), so it's a training record, not
+// an exam control. A COMPLETED attempt never moves back to STARTED.
+model LabAttempt {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  blockId      String
+  block        ContentBlock     @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  status       LabAttemptStatus @default(STARTED)
+  // Highest step the learner has completed so far (0..totalSteps).
+  furthestStep Int              @default(0)
+  totalSteps   Int
+  mistakes     Int              @default(0)
+  startedAt    DateTime         @default(now())
+  completedAt  DateTime?
+  lastEventAt  DateTime         @default(now())
+
+  @@unique([userId, blockId])
+  @@index([blockId])
 }
 
 // A Quiz belongs to exactly one of: a Module (per-module check) or a Course
 // (the final "master test" gating the certificate).
 model Quiz {
-  id            String         @id @default(cuid())
-  moduleId      String?        @unique
-  module        Module?        @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  courseId      String?        @unique
-  course        Course?        @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  passingScore  Int            @default(75)
-  createdAt     DateTime       @default(now())
-  questions     QuizQuestion[]
-  attempts      QuizAttempt[]
+  id           String         @id @default(cuid())
+  moduleId     String?        @unique
+  module       Module?        @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  courseId     String?        @unique
+  course       Course?        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  passingScore Int            @default(75)
+  createdAt    DateTime       @default(now())
+  questions    QuizQuestion[]
+  attempts     QuizAttempt[]
 }
 
 model QuizQuestion {
@@ -216,24 +254,24 @@ model Enrollment {
 }
 
 model ModuleProgress {
-  id           String     @id @default(cuid())
-  enrollmentId String
-  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  moduleId     String
-  module       Module     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  completed    Boolean    @default(false)
-  completedAt  DateTime?
+  id             String     @id @default(cuid())
+  enrollmentId   String
+  enrollment     Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  moduleId       String
+  module         Module     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  completed      Boolean    @default(false)
+  completedAt    DateTime?
   // True once the module's directly-uploaded (native <video>) file has been
   // played through to the end at least once. Only enforced as a quiz gate
   // for that video kind — YouTube/Vimeo/Drive embeds have no reliable,
   // cross-origin-safe way to detect real playback completion, so those
   // modules are never gated by this flag (see lib/video.ts).
-  videoWatched Boolean    @default(false)
+  videoWatched   Boolean    @default(false)
   // Self-reported confirmation that the student did the exercise in the
   // module's "Now it's your turn" callout (see HONOR_CALLOUT_HEADING in
   // lib/module-content.ts). Honor system only — not independently verified,
   // just gates the quiz behind an explicit checkbox.
-  honorConfirmed Boolean  @default(false)
+  honorConfirmed Boolean    @default(false)
 
   @@unique([enrollmentId, moduleId])
 }

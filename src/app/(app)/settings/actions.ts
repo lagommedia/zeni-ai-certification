@@ -8,6 +8,7 @@ import { CalloutVariant, ContentBlockType, CourseLevel, Role } from "@/generated
 import { formatObjectivesBody, OBJECTIVES_BLOCK_HEADING, OBJECTIVES_BLOCK_ORDER } from "@/lib/module-content";
 import { deleteUploadedFile, MAX_VIDEO_FILE_SIZE, saveUploadedFile } from "@/lib/uploads";
 import { generateFinalExamQuestions } from "@/lib/generate-exam";
+import { MAX_LAB_FILE_SIZE } from "@/lib/labs";
 
 async function requireAdmin() {
   const user = await requireUser();
@@ -415,6 +416,21 @@ export async function deleteQuizQuestionAction(formData: FormData) {
 
 // ---------- Module lesson content blocks ----------
 
+function assertLabFile(file: File) {
+  if (!/\.html?$/i.test(file.name)) throw new Error("The lab file must be an .html file");
+  if (file.size > MAX_LAB_FILE_SIZE) {
+    throw new Error(`The lab file is too large — ${MAX_LAB_FILE_SIZE / (1024 * 1024)}MB max`);
+  }
+}
+
+function readLabFields(formData: FormData) {
+  return {
+    labFile: formData.get("labFile"),
+    labId: String(formData.get("labId") ?? "").trim().slice(0, 100) || null,
+    labRequired: formData.get("labRequired") === "on",
+  };
+}
+
 export async function addContentBlockAction(formData: FormData) {
   await requireAdmin();
   const moduleId = String(formData.get("moduleId") ?? "");
@@ -424,15 +440,25 @@ export async function addContentBlockAction(formData: FormData) {
   const body = String(formData.get("body") ?? "").trim();
   const variant = String(formData.get("variant") ?? "NEUTRAL") as CalloutVariant;
   const file = formData.get("file");
+  const { labFile, labId, labRequired } = readLabFields(formData);
 
   if (!moduleId || !courseId) throw new Error("Missing moduleId");
-  if (type === "HEADING" && !heading) throw new Error("A heading block needs heading text");
-  if (type !== "HEADING" && !body) throw new Error("A body is required");
+  if ((type === "HEADING" || type === "LAB") && !heading) {
+    throw new Error(type === "LAB" ? "An interactive lab needs a title" : "A heading block needs heading text");
+  }
+  if (type !== "HEADING" && type !== "LAB" && !body) throw new Error("A body is required");
 
   let fileUrl: string | null = null;
   let fileName: string | null = null;
   if (type === "CALLOUT" && file instanceof File && file.size > 0) {
     const saved = await saveUploadedFile(file);
+    fileUrl = saved.url;
+    fileName = saved.name;
+  }
+  if (type === "LAB") {
+    if (!(labFile instanceof File) || labFile.size === 0) throw new Error("Upload the lab's .html file");
+    assertLabFile(labFile);
+    const saved = await saveUploadedFile(labFile, MAX_LAB_FILE_SIZE);
     fileUrl = saved.url;
     fileName = saved.name;
   }
@@ -448,6 +474,8 @@ export async function addContentBlockAction(formData: FormData) {
       variant: type === "CALLOUT" ? variant : null,
       fileUrl,
       fileName,
+      labId: type === "LAB" ? labId : null,
+      labRequired: type === "LAB" ? labRequired : true,
     },
   });
 
@@ -465,17 +493,33 @@ export async function updateContentBlockAction(formData: FormData) {
   const variant = String(formData.get("variant") ?? "NEUTRAL") as CalloutVariant;
   const file = formData.get("file");
   const removeFile = formData.get("removeFile") === "true";
+  const { labFile, labId, labRequired } = readLabFields(formData);
 
   if (!blockId) throw new Error("Missing blockId");
-  if (type === "HEADING" && !heading) throw new Error("A heading block needs heading text");
-  if (type !== "HEADING" && !body) throw new Error("A body is required");
+  if ((type === "HEADING" || type === "LAB") && !heading) {
+    throw new Error(type === "LAB" ? "An interactive lab needs a title" : "A heading block needs heading text");
+  }
+  if (type !== "HEADING" && type !== "LAB" && !body) throw new Error("A body is required");
 
   const existing = await prisma.contentBlock.findUniqueOrThrow({ where: { id: blockId } });
 
   let fileUrl = existing.fileUrl;
   let fileName = existing.fileName;
 
-  if (type === "CALLOUT" && file instanceof File && file.size > 0) {
+  if (type === "LAB") {
+    if (labFile instanceof File && labFile.size > 0) {
+      assertLabFile(labFile);
+      // Save the new file first so a failed upload never leaves the block with no lab.
+      const saved = await saveUploadedFile(labFile, MAX_LAB_FILE_SIZE);
+      await deleteUploadedFile(existing.fileUrl);
+      fileUrl = saved.url;
+      fileName = saved.name;
+    } else if (existing.type !== "LAB" || !existing.fileUrl) {
+      // Converting another block type into a lab (whose old file, if any, was
+      // a callout attachment, not a lab) needs a fresh lab file.
+      throw new Error("Upload the lab's .html file");
+    }
+  } else if (type === "CALLOUT" && file instanceof File && file.size > 0) {
     await deleteUploadedFile(existing.fileUrl);
     const saved = await saveUploadedFile(file);
     fileUrl = saved.url;
@@ -495,6 +539,8 @@ export async function updateContentBlockAction(formData: FormData) {
       variant: type === "CALLOUT" ? variant : null,
       fileUrl,
       fileName,
+      labId: type === "LAB" ? labId : null,
+      labRequired: type === "LAB" ? labRequired : true,
     },
   });
 

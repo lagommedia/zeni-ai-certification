@@ -2,6 +2,7 @@ import "server-only";
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { EnrollmentStatus } from "@/generated/prisma/client";
+import { assertRequiredLabsDone } from "@/lib/labs";
 
 export function certNumber(courseId: string, userId: string) {
   return `ZC-${courseId.slice(-6).toUpperCase()}${userId.slice(-4).toUpperCase()}`;
@@ -166,6 +167,7 @@ export async function setModuleCompletion(
   }
 
   if (completed) {
+    await assertRequiredLabsDone(userId, moduleId);
     const { courseId, certificateIssued } = await markModuleComplete(userId, moduleId);
     return { courseId, certificateIssued };
   }
@@ -196,6 +198,7 @@ export async function markModuleVideoWatched(userId: string, moduleId: string) {
 
 /** Sets (or clears) the honor-system "I did the exercise" confirmation for a module. */
 export async function setModuleHonorConfirmed(userId: string, moduleId: string, confirmed: boolean) {
+  if (confirmed) await assertRequiredLabsDone(userId, moduleId);
   const courseModule = await prisma.module.findUniqueOrThrow({ where: { id: moduleId } });
   const enrollment = await ensureEnrollment(userId, courseModule.courseId);
 
@@ -233,6 +236,7 @@ export async function submitModuleQuizAttempt(
     include: { quiz: { include: { questions: { include: { choices: true }, orderBy: { order: "asc" } } } } },
   });
   if (!courseModule.quiz) throw new Error("This module doesn't have a quiz.");
+  await assertRequiredLabsDone(userId, moduleId);
 
   const result = gradeAnswers(courseModule.quiz.questions, answers, courseModule.quiz.passingScore);
 

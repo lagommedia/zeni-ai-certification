@@ -3,7 +3,9 @@ import { cn } from "@/lib/utils";
 import { parseRichText, type InlineSegment } from "@/lib/rich-text";
 import { CopyBlock } from "@/components/copy-block";
 import { HonorCheckbox } from "@/components/honor-checkbox";
+import { LabCard } from "@/components/lab-card";
 import { isHonorCallout } from "@/lib/module-content";
+import type { LabAttemptView } from "@/lib/lab-events";
 
 function Segments({ segments }: { segments: InlineSegment[] }) {
   return (
@@ -58,22 +60,35 @@ const CALLOUT_STYLES: Record<string, { container: string; eyebrow: string; body:
 
 export type ContentBlockView = {
   id: string;
-  type: "PARAGRAPH" | "HEADING" | "CALLOUT" | "COPY_BLOCK";
+  type: "PARAGRAPH" | "HEADING" | "CALLOUT" | "COPY_BLOCK" | "LAB";
   heading: string | null;
   body: string | null;
   variant: "NEUTRAL" | "HIGHLIGHT" | "ACTION" | null;
   fileUrl: string | null;
   fileName: string | null;
+  labRequired: boolean;
+};
+
+export type LabContext = {
+  courseTitle: string;
+  moduleTitle: string;
+  // Saved attempts for this learner, keyed by LAB block id.
+  attempts: Record<string, LabAttemptView>;
 };
 
 export function ModuleContent({
   blocks,
   moduleId,
   honorConfirmed,
+  labContext,
+  labLocked,
 }: {
   blocks: ContentBlockView[];
   moduleId?: string;
   honorConfirmed?: boolean;
+  labContext?: LabContext;
+  // A required lab in this module is still unfinished.
+  labLocked?: boolean;
 }) {
   if (blocks.length === 0) return null;
 
@@ -90,6 +105,23 @@ export function ModuleContent({
 
         if (block.type === "COPY_BLOCK") {
           return block.body ? <CopyBlock key={block.id} text={block.body} /> : null;
+        }
+
+        if (block.type === "LAB") {
+          if (!labContext) return null;
+          return (
+            <LabCard
+              key={block.id}
+              blockId={block.id}
+              title={block.heading ?? "Interactive lab"}
+              required={block.labRequired}
+              courseTitle={labContext.courseTitle}
+              moduleTitle={labContext.moduleTitle}
+              initialAttempt={labContext.attempts[block.id] ?? null}
+            >
+              {block.body && <RichText text={block.body} />}
+            </LabCard>
+          );
         }
 
         if (block.type === "CALLOUT") {
@@ -116,7 +148,11 @@ export function ModuleContent({
                 </a>
               )}
               {moduleId && isHonorCallout(block) && (
-                <HonorCheckbox moduleId={moduleId} initialConfirmed={honorConfirmed ?? false} />
+                <HonorCheckbox
+                  moduleId={moduleId}
+                  initialConfirmed={honorConfirmed ?? false}
+                  lockedReason={labLocked ? "Finish the lab to unlock this" : undefined}
+                />
               )}
             </div>
           );

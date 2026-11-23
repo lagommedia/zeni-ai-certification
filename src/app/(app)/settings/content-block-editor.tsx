@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowDown, ArrowUp, Paperclip, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, FlaskConical, Paperclip, Trash2 } from "lucide-react";
 import {
   addContentBlockAction,
   deleteContentBlockAction,
@@ -20,20 +20,25 @@ import {
 
 type ContentBlockRow = {
   id: string;
-  type: "PARAGRAPH" | "HEADING" | "CALLOUT" | "COPY_BLOCK";
+  type: "PARAGRAPH" | "HEADING" | "CALLOUT" | "COPY_BLOCK" | "LAB";
   order: number;
   heading: string | null;
   body: string | null;
   variant: "NEUTRAL" | "HIGHLIGHT" | "ACTION" | null;
   fileUrl: string | null;
   fileName: string | null;
+  labId: string | null;
+  labRequired: boolean;
 };
+
+export type LabStats = Record<string, { started: number; completed: number }>;
 
 const TYPE_LABEL: Record<ContentBlockRow["type"], string> = {
   PARAGRAPH: "Paragraph",
   HEADING: "Heading",
   CALLOUT: "Callout",
   COPY_BLOCK: "Copy box",
+  LAB: "Interactive lab",
 };
 
 function BlockFields({ block }: { block?: ContentBlockRow }) {
@@ -51,6 +56,7 @@ function BlockFields({ block }: { block?: ContentBlockRow }) {
               <SelectItem value="HEADING">Heading</SelectItem>
               <SelectItem value="CALLOUT">Callout</SelectItem>
               <SelectItem value="COPY_BLOCK">Copy box — sapphire, with a Copy button</SelectItem>
+              <SelectItem value="LAB">Interactive lab — a practice file learners complete in-app</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -69,11 +75,11 @@ function BlockFields({ block }: { block?: ContentBlockRow }) {
         </div>
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label>Heading text (for a Heading block) or eyebrow label (for a Callout)</Label>
+        <Label>Heading text (Heading block), eyebrow label (Callout), or lab title (Interactive lab)</Label>
         <Input name="heading" defaultValue={block?.heading ?? ""} placeholder="e.g. Now you" />
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label>Body (Paragraph / Callout / Copy box)</Label>
+        <Label>Body (Paragraph / Callout / Copy box) or lab description (Interactive lab)</Label>
         <Textarea
           name="body"
           defaultValue={block?.body ?? ""}
@@ -85,7 +91,7 @@ function BlockFields({ block }: { block?: ContentBlockRow }) {
       </div>
       <div className="flex flex-col gap-1.5">
         <Label>Attachment (callouts only) — lets the user download a file to test with</Label>
-        {block?.fileName && (
+        {block?.fileName && block.type !== "LAB" && (
           <div className="flex items-center justify-between gap-2 rounded-lg border bg-secondary/40 px-3 py-2 text-sm">
             <span className="flex items-center gap-1.5 truncate">
               <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
@@ -99,6 +105,39 @@ function BlockFields({ block }: { block?: ContentBlockRow }) {
         )}
         <Input name="file" type="file" />
       </div>
+      <div className="flex flex-col gap-3 rounded-lg border border-dashed p-3">
+        <p className="text-sm font-medium">Interactive lab settings (Interactive lab only)</p>
+        <div className="flex flex-col gap-1.5">
+          <Label>Lab file (.html, up to 5 MB)</Label>
+          {block?.type === "LAB" && block.fileName && (
+            <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <FlaskConical className="size-3.5 shrink-0" />
+              Current file: {block.fileName} — choose a file below to replace it
+            </p>
+          )}
+          <Input name="labFile" type="file" accept=".html,.htm,text/html" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label>Lab ID (optional)</Label>
+          <Input
+            name="labId"
+            defaultValue={block?.labId ?? ""}
+            placeholder="e.g. ai-accountant-lab-1"
+          />
+          <p className="text-xs text-muted-foreground">
+            If set, progress events from the file must report this same id.
+          </p>
+        </div>
+        <label className="flex w-fit items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="labRequired"
+            defaultChecked={block ? block.labRequired : true}
+            className="size-4 accent-sapphire"
+          />
+          Required to complete the module
+        </label>
+      </div>
     </>
   );
 }
@@ -107,10 +146,12 @@ export function ContentBlockEditor({
   moduleId,
   courseId,
   blocks,
+  labStats = {},
 }: {
   moduleId: string;
   courseId: string;
   blocks: ContentBlockRow[];
+  labStats?: LabStats;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -126,6 +167,11 @@ export function ContentBlockEditor({
                 <span className="ml-2 text-muted-foreground">{block.heading || block.body}</span>
               )}
             </span>
+            {block.type === "LAB" && (
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {labStats[block.id]?.completed ?? 0} completed · {labStats[block.id]?.started ?? 0} started
+              </span>
+            )}
           </summary>
           <div className="flex flex-col gap-3 border-t p-3">
             <form action={updateContentBlockAction} className="flex flex-col gap-3">

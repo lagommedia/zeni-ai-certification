@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { VideoDropzone } from "@/components/video-dropzone";
 import { QuizEditor } from "../../quiz-editor";
-import { ContentBlockEditor } from "../../content-block-editor";
+import { ContentBlockEditor, type LabStats } from "../../content-block-editor";
 import {
   Select,
   SelectContent,
@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, FlaskConical, Sparkles, Trash2 } from "lucide-react";
 import {
   addModuleAction,
   createFinalExamAction,
@@ -62,15 +62,37 @@ export default async function ManageCoursePage({
   });
   if (!course) notFound();
 
+  // Per-LAB-block started/completed counts for the editor.
+  const labAttemptCounts = await prisma.labAttempt.groupBy({
+    by: ["blockId", "status"],
+    where: { block: { module: { courseId } } },
+    _count: { _all: true },
+  });
+  const labStats: LabStats = {};
+  for (const row of labAttemptCounts) {
+    const entry = (labStats[row.blockId] ??= { started: 0, completed: 0 });
+    entry.started += row._count._all;
+    if (row.status === "COMPLETED") entry.completed += row._count._all;
+  }
+
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
-      <Link
-        href="/settings"
-        className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" />
-        Back to settings
-      </Link>
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href="/settings"
+          className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-3.5" />
+          Back to settings
+        </Link>
+        <Link
+          href={`/settings/lab-progress?course=${course.id}`}
+          className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <FlaskConical className="size-3.5" />
+          Lab progress
+        </Link>
+      </div>
 
       <div className="flex flex-col gap-4 rounded-xl border bg-card p-6">
         <h1 className="text-lg font-semibold">Course details</h1>
@@ -221,7 +243,12 @@ export default async function ManageCoursePage({
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">
                   Additional lesson content — paragraphs, headings, and callouts
                 </Label>
-                <ContentBlockEditor moduleId={module.id} courseId={course.id} blocks={otherBlocks} />
+                <ContentBlockEditor
+                  moduleId={module.id}
+                  courseId={course.id}
+                  blocks={otherBlocks}
+                  labStats={labStats}
+                />
               </div>
 
               <div className="flex flex-col gap-1.5">
